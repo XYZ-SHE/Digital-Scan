@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project: Digital Biopsy // Neural Scan</title>
+    <style>
+        /* =========================================
+           1. GLOBAL SETUP
+           - Dark theme for medical/cyberpunk vibe
+           - 400vh height ensures enough scroll space for 4 layers
+           ========================================= */
+        body {
+            margin: 0;
+            background-color: #000;
+            color: #00ffcc; 
+            font-family: 'Courier New', 'Roboto Mono', monospace; 
+            height: 400vh; 
+            overflow-x: hidden; 
+            cursor: crosshair; 
+        }
+
+        /* =========================================
+           2. MAIN CONTAINER
+           - Fixed position to keep images centered while scrolling
+           ========================================= */
+        .scan-container {
+            position: fixed;
+            top: 45%; 
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 70vmin; 
+            height: 70vmin;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            pointer-events: none; 
+            overflow: hidden; 
+            border: 1px solid rgba(0, 255, 204, 0.1); 
+        }
+
+        /* Image styling: mix-blend-mode for the X-ray look */
+        .brain-layer {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            opacity: 0; /* Hidden by default */
+            transition: opacity 0.4s ease-out; 
+            mix-blend-mode: screen; 
+            filter: contrast(1.1) brightness(1.1);
+        }
+
+        /* =========================================
+           3. TEXT REPORT (BOTTOM)
+           - Dynamic text area explaining the current layer
+           ========================================= */
+        .analysis-report {
+            position: fixed;
+            top: 82%; 
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80%;
+            max-width: 600px;
+            text-align: center;
+            z-index: 100;
+            text-shadow: 0 0 5px rgba(0, 255, 204, 0.5);
+            pointer-events: none;
+        }
+
+        .report-title {
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-bottom: 8px;
+            border-bottom: 1px solid rgba(0, 255, 204, 0.3);
+            display: inline-block;
+            padding-bottom: 4px;
+        }
+
+        .report-desc {
+            font-size: 0.9em;
+            color: #ccfff5;
+            line-height: 1.5;
+            opacity: 0.9;
+        }
+
+        /* =========================================
+           4. ANIMATION: SIGNAL NOISE (GLITCH)
+           - Triggered when switching layers
+           ========================================= */
+        @keyframes signal-noise {
+            0% { transform: scale(1); filter: blur(0px) brightness(1) drop-shadow(0 0 0 rgba(0,0,0,0)); opacity: 1; }
+            10% { filter: blur(4px) brightness(1.5); opacity: 0.8; }
+            20% { transform: scaleX(1.02); filter: blur(1px) drop-shadow(-5px 0 0 rgba(255,0,0,0.8)) drop-shadow(5px 0 0 rgba(0,255,255,0.8)); }
+            30% { filter: blur(8px) brightness(0.7); opacity: 0.5; }
+            40% { filter: invert(1) blur(2px); transform: scale(1.01); }
+            50% { filter: blur(0px); opacity: 1; }
+            60% { filter: blur(2px) drop-shadow(4px 0 0 rgba(255,0,255,0.8)) drop-shadow(-4px 0 0 rgba(0,255,0,0.8)); transform: scale(1.03); }
+            70% { filter: brightness(2.5) blur(3px); }
+            80% { filter: blur(0px); }
+            90% { transform: skewX(1deg); filter: blur(1px); }
+            100% { transform: scale(1); filter: blur(0px) brightness(1); opacity: 1; }
+        }
+
+        .glitch-effect {
+            animation: signal-noise 0.4s linear infinite both;
+            mix-blend-mode: hard-light; 
+            z-index: 100; 
+        }
+
+        /* =========================================
+           5. UI ELEMENTS (HUD)
+           - Static overlays: status, depth gauge, scanlines
+           ========================================= */
+        .hud-data {
+            position: fixed;
+            top: 30px;
+            left: 30px;
+            font-size: 14px;
+            line-height: 1.6;
+            z-index: 100;
+            text-shadow: 0 0 5px rgba(0, 255, 204, 0.5);
+        }
+
+        .hud-data span { font-weight: bold; }
+        .warning { color: #ff3333; text-shadow: 0 0 5px #ff3333; display: none; }
+
+        .scanline {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: repeating-linear-gradient(to bottom, transparent 0px, transparent 2px, rgba(0, 255, 204, 0.03) 3px, rgba(0, 255, 204, 0.03) 4px);
+            pointer-events: none; z-index: 90;
+        }
+
+        .depth-gauge {
+            position: fixed; right: 30px; top: 50%; transform: translateY(-50%);
+            height: 300px; width: 2px; background: rgba(0, 255, 204, 0.3);
+        }
+        .depth-indicator {
+            position: absolute; top: 0; left: -10px; width: 20px; height: 2px;
+            background: #00ffcc; box-shadow: 0 0 8px #00ffcc; transition: top 0.1s;
+        }
+
+        /* Simple loading screen */
+        #loader {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #000; z-index: 9999; display: flex;
+            justify-content: center; align-items: center; flex-direction: column;
+            transition: opacity 1s;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="loader">
+        <div style="text-align:center;">INITIALIZING NEURAL LINK...<br>Please Wait</div>
+    </div>
+
+    <div class="scanline"></div>
+
+    <div class="hud-data">
+        SUBJECT ID: <span style="color:#fff">USER_001</span><br>
+        SYSTEM STATUS: <span id="status-text">NORMAL</span> <span class="warning" id="warning-msg">[BREACH DETECTED]</span><br>
+        SCAN DEPTH: -<span id="depth-val">000</span> mm<br>
+        LAYER TYPE: <span id="layer-id-disp">BIO_SURFACE</span><br>
+        DATA INTEGRITY: <span id="integrity-val">100</span>%
+    </div>
+
+    <div class="depth-gauge">
+        <div class="depth-indicator" id="depth-marker"></div>
+    </div>
+
+    <audio id="bgm" loop hidden>
+        <source src="Silicon Transmitter - Drone.mp3" type="audio/mpeg">
+    </audio>
+
+    <div class="scan-container">
+        <img src="1.jpg" class="brain-layer" id="layer1" style="opacity: 1;" 
+             data-name="PHASE I: DIGITAL BIOPSY" 
+             data-desc=">> SCANNING DIGITAL EPIDERMIS...<br>Mapping physical identity to virtual ID to construct an initial digital mirror." 
+             data-risk="LOW">
+        
+        <img src="2.jpg" class="brain-layer" id="layer2" 
+             data-name="PHASE II: BEHAVIORAL EXTRACTION" 
+             data-desc=">> ACCESSING NEURAL PROBES (APP CLUSTERS)...<br>Extracting behavioral patterns and geolocation data via seamless passive collection." 
+             data-risk="MODERATE">
+        
+        <img src="3.jpg" class="brain-layer" id="layer3" 
+             data-name="PHASE III: CLOUD AGGREGATION" 
+             data-desc=">> UPLOADING TO OFFSHORE SERVERS...<br>Fragmented privacy is reconstructed in the cloud into a permanent, searchable profile." 
+             data-risk="HIGH">
+        
+        <img src="4.jpg" class="brain-layer" id="layer4" 
+             data-name="PHASE IV: CORPORATE ASSIMILATION" 
+             data-desc=">> ASSET TRANSFER COMPLETE...<br>Personal data assimilated by corporate entities. Individual will converted into commercial capital." 
+             data-risk="CRITICAL">
+    </div>
+
+    <div class="analysis-report">
+        <div class="report-title" id="report-title-el">PHASE I: DIGITAL BIOPSY</div><br>
+        <div class="report-desc" id="report-desc-el">>> SCANNING DIGITAL EPIDERMIS...<br>Mapping physical identity to virtual ID to construct an initial digital mirror.</div>
+    </div>
+
+    <script>
+        // Init loader fade out
+        window.onload = () => {
+            setTimeout(() => {
+                document.getElementById('loader').style.opacity = 0;
+                setTimeout(() => {
+                    document.getElementById('loader').style.display = 'none';
+                }, 1000);
+            }, 1000);
+        };
+
+        // State tracking
+        let currentActiveLayerId = 'layer1';
+        let glitchTimeout;
+
+        // --- AUDIO TRIGGER ---
+        // Browsers block auto-play. We wait for the first user click to start the BGM.
+        window.addEventListener('click', () => {
+            const audio = document.getElementById('bgm');
+            // Only play if not already playing
+            if (audio.paused) {
+                audio.volume = 0.4; // Keep volume lower for background effect
+                audio.play().catch(e => console.log("Audio play prevented by browser"));
+            }
+        }, { once: true }); // "once: true" means this listener removes itself after running
+
+        // Function: Trigger visual glitch when layer changes
+        function triggerGlitch() {
+            const layers = document.querySelectorAll('.brain-layer');
+            const container = document.querySelector('.scan-container');
+
+            clearTimeout(glitchTimeout);
+            
+            // Add glitch class and change border color
+            layers.forEach(l => l.classList.add('glitch-effect'));
+            container.style.borderColor = "rgba(255, 50, 50, 0.5)";
+
+            // Reset after 400ms
+            glitchTimeout = setTimeout(() => {
+                layers.forEach(l => l.classList.remove('glitch-effect'));
+                container.style.borderColor = "rgba(0, 255, 204, 0.1)";
+            }, 400); 
+        }
+
+        // Main scroll handler
+        window.addEventListener('scroll', () => {
+            const scrollY = window.scrollY;
+            const winHeight = window.innerHeight;
+            const docHeight = document.body.scrollHeight - winHeight;
+            
+            // Calculate scroll percentage (0.0 to 1.0)
+            const scrollPercent = Math.max(0, Math.min(1, scrollY / docHeight));
+
+            // 1. Update HUD Numbers (Depth & Integrity)
+            const depth = Math.min(Math.floor(scrollPercent * 400), 400);
+            document.getElementById('depth-val').innerText = depth.toString().padStart(3, '0');
+            
+            // Move the depth marker
+            const gaugeHeight = 300; 
+            document.getElementById('depth-marker').style.top = (scrollPercent * gaugeHeight) + 'px';
+
+            const integrity = Math.max(100 - Math.floor(scrollPercent * 100), 0);
+            document.getElementById('integrity-val').innerText = integrity;
+
+            // 2. Determine Active Layer
+            // Logic: Split total scroll distance into 4 equal parts (0.25 each)
+            let newActiveLayerId = currentActiveLayerId;
+            
+            if (scrollPercent < 0.25) newActiveLayerId = 'layer1';
+            else if (scrollPercent < 0.50) newActiveLayerId = 'layer2';
+            else if (scrollPercent < 0.75) newActiveLayerId = 'layer3';
+            else newActiveLayerId = 'layer4';
+
+            // 3. Switch Content if Layer Changed
+            if (newActiveLayerId !== currentActiveLayerId) {
+                const newLayerEl = document.getElementById(newActiveLayerId);
+                
+                // Get data from HTML attributes
+                const layerTitle = newLayerEl.dataset.name;
+                const layerDesc = newLayerEl.dataset.desc; 
+                const riskLevel = newLayerEl.dataset.risk;
+
+                // Update Text Elements
+                document.getElementById('layer-id-disp').innerText = newActiveLayerId.toUpperCase();
+                document.getElementById('report-title-el').innerText = layerTitle;
+                document.getElementById('report-desc-el').innerHTML = layerDesc;
+
+                // Handle Warning Status (Red alert for High/Critical risk)
+                const warningEl = document.getElementById('warning-msg');
+                const statusText = document.getElementById('status-text');
+                
+                if (riskLevel === 'HIGH' || riskLevel === 'CRITICAL') {
+                    warningEl.style.display = 'inline';
+                    statusText.style.color = 'red';
+                    statusText.innerText = 'UNSTABLE';
+                } else {
+                    warningEl.style.display = 'none';
+                    statusText.style.color = '#00ffcc';
+                    statusText.innerText = 'NORMAL';
+                }
+
+                // Trigger Animation and Opacity Swap
+                triggerGlitch();
+                document.querySelectorAll('.brain-layer').forEach(l => l.style.opacity = 0);
+                newLayerEl.style.opacity = 1;
+
+                currentActiveLayerId = newActiveLayerId;
+            }
+        });
+    </script>
+</body>
+</html>
