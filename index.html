@@ -7,8 +7,6 @@
     <style>
         /* =========================================
            1. GLOBAL SETUP
-           - Dark theme for medical/cyberpunk vibe
-           - 400vh height ensures enough scroll space for 4 layers
            ========================================= */
         body {
             margin: 0;
@@ -22,7 +20,6 @@
 
         /* =========================================
            2. MAIN CONTAINER
-           - Fixed position to keep images centered while scrolling
            ========================================= */
         .scan-container {
             position: fixed;
@@ -39,7 +36,6 @@
             border: 1px solid rgba(0, 255, 204, 0.1); 
         }
 
-        /* Image styling: mix-blend-mode for the X-ray look */
         .brain-layer {
             position: absolute;
             width: 100%;
@@ -52,8 +48,7 @@
         }
 
         /* =========================================
-           3. TEXT REPORT (BOTTOM)
-           - Dynamic text area explaining the current layer
+           3. TEXT BOTTOM
            ========================================= */
         .analysis-report {
             position: fixed;
@@ -85,8 +80,7 @@
         }
 
         /* =========================================
-           4. ANIMATION: SIGNAL NOISE (GLITCH)
-           - Triggered when switching layers
+           4. ANIMATION
            ========================================= */
         @keyframes signal-noise {
             0% { transform: scale(1); filter: blur(0px) brightness(1) drop-shadow(0 0 0 rgba(0,0,0,0)); opacity: 1; }
@@ -109,8 +103,7 @@
         }
 
         /* =========================================
-           5. UI ELEMENTS (HUD)
-           - Static overlays: status, depth gauge, scanlines
+           5. UI ELEMENTS
            ========================================= */
         .hud-data {
             position: fixed;
@@ -216,8 +209,7 @@
         let currentActiveLayerId = 'layer1';
         let glitchTimeout;
 
-        // --- AUDIO TRIGGER ---
-        // Browsers block auto-play. We wait for the first user click to start the BGM.
+        // AUDIO TRIGGER
         window.addEventListener('click', () => {
             const audio = document.getElementById('bgm');
             // Only play if not already playing
@@ -227,18 +219,12 @@
             }
         }, { once: true }); // "once: true" means this listener removes itself after running
 
-        // Function: Trigger visual glitch when layer changes
         function triggerGlitch() {
             const layers = document.querySelectorAll('.brain-layer');
             const container = document.querySelector('.scan-container');
-
-            clearTimeout(glitchTimeout);
-            
-            // Add glitch class and change border color
+            clearTimeout(glitchTimeout);            
             layers.forEach(l => l.classList.add('glitch-effect'));
             container.style.borderColor = "rgba(255, 50, 50, 0.5)";
-
-            // Reset after 400ms
             glitchTimeout = setTimeout(() => {
                 layers.forEach(l => l.classList.remove('glitch-effect'));
                 container.style.borderColor = "rgba(0, 255, 204, 0.1)";
@@ -250,48 +236,28 @@
             const scrollY = window.scrollY;
             const winHeight = window.innerHeight;
             const docHeight = document.body.scrollHeight - winHeight;
-            
-            // Calculate scroll percentage (0.0 to 1.0)
             const scrollPercent = Math.max(0, Math.min(1, scrollY / docHeight));
-
-            // 1. Update HUD Numbers (Depth & Integrity)
             const depth = Math.min(Math.floor(scrollPercent * 400), 400);
             document.getElementById('depth-val').innerText = depth.toString().padStart(3, '0');
-            
-            // Move the depth marker
             const gaugeHeight = 300; 
             document.getElementById('depth-marker').style.top = (scrollPercent * gaugeHeight) + 'px';
-
             const integrity = Math.max(100 - Math.floor(scrollPercent * 100), 0);
             document.getElementById('integrity-val').innerText = integrity;
-
-            // 2. Determine Active Layer
-            // Logic: Split total scroll distance into 4 equal parts (0.25 each)
             let newActiveLayerId = currentActiveLayerId;
-            
             if (scrollPercent < 0.25) newActiveLayerId = 'layer1';
             else if (scrollPercent < 0.50) newActiveLayerId = 'layer2';
             else if (scrollPercent < 0.75) newActiveLayerId = 'layer3';
             else newActiveLayerId = 'layer4';
-
-            // 3. Switch Content if Layer Changed
             if (newActiveLayerId !== currentActiveLayerId) {
                 const newLayerEl = document.getElementById(newActiveLayerId);
-                
-                // Get data from HTML attributes
                 const layerTitle = newLayerEl.dataset.name;
                 const layerDesc = newLayerEl.dataset.desc; 
                 const riskLevel = newLayerEl.dataset.risk;
-
-                // Update Text Elements
                 document.getElementById('layer-id-disp').innerText = newActiveLayerId.toUpperCase();
                 document.getElementById('report-title-el').innerText = layerTitle;
                 document.getElementById('report-desc-el').innerHTML = layerDesc;
-
-                // Handle Warning Status (Red alert for High/Critical risk)
                 const warningEl = document.getElementById('warning-msg');
-                const statusText = document.getElementById('status-text');
-                
+                const statusText = document.getElementById('status-text');                
                 if (riskLevel === 'HIGH' || riskLevel === 'CRITICAL') {
                     warningEl.style.display = 'inline';
                     statusText.style.color = 'red';
@@ -314,3 +280,4 @@
 </body>
 
 </html>
+
